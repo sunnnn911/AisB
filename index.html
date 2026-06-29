@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>폐열 발전 실시간 모니터링</title>
+  <style>
+    :root {
+      --bg: #070b16;
+      --panel: rgba(255,255,255,0.075);
+      --panel2: rgba(255,255,255,0.11);
+      --line: rgba(255,255,255,0.16);
+      --text: #f5f7ff;
+      --muted: #9fa9c8;
+      --accent: #61dafb;
+      --hot: #ff7a45;
+      --cold: #5ca8ff;
+      --volt: #ffd166;
+      --good: #49e68b;
+      --danger: #ff4d6d;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(255,122,69,0.25), transparent 32%),
+        radial-gradient(circle at top right, rgba(97,218,251,0.22), transparent 35%),
+        linear-gradient(135deg, #060913 0%, #0a1024 50%, #03050b 100%);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    header {
+      padding: 28px 22px 14px;
+      text-align: center;
+    }
+
+    .title {
+      font-size: clamp(28px, 5vw, 56px);
+      font-weight: 900;
+      letter-spacing: -1.5px;
+      margin: 0;
+      text-shadow: 0 0 28px rgba(97,218,251,0.25);
+    }
+
+    .subtitle {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .wrap {
+      width: min(1320px, calc(100% - 28px));
+      margin: 0 auto 32px;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin: 18px 0;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      background: var(--panel2);
+      color: var(--text);
+      padding: 14px 16px;
+      border-radius: 16px;
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+      backdrop-filter: blur(10px);
+      transition: transform .15s ease, border-color .15s ease, background .15s ease;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      border-color: rgba(97,218,251,0.55);
+      background: rgba(97,218,251,0.14);
+    }
+
+    button.primary {
+      background: linear-gradient(135deg, rgba(97,218,251,0.34), rgba(73,230,139,0.18));
+      border-color: rgba(97,218,251,0.45);
+    }
+
+    button.recording {
+      background: linear-gradient(135deg, rgba(73,230,139,0.28), rgba(73,230,139,0.12));
+      border-color: rgba(73,230,139,0.75);
+    }
+
+    button.danger {
+      background: rgba(255,77,109,0.12);
+      border-color: rgba(255,77,109,0.3);
+    }
+
+    .status-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 16px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .status-pill {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      padding: 9px 12px;
+      border-radius: 999px;
+    }
+
+    .dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #6d7489;
+      margin-right: 7px;
+    }
+
+    .dot.on {
+      background: var(--good);
+      box-shadow: 0 0 14px rgba(73,230,139,0.8);
+    }
+
+    .dashboard {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      padding: 18px;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 16px 50px rgba(0,0,0,0.25);
+      min-height: 132px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::after {
+      content: "";
+      position: absolute;
+      inset: auto -40px -70px auto;
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.06);
+    }
+
+    .card h2 {
+      margin: 0;
+      font-size: 15px;
+      color: var(--muted);
+      font-weight: 800;
+    }
+
+    .value {
+      margin-top: 14px;
+      font-size: clamp(26px, 4vw, 44px);
+      font-weight: 950;
+      letter-spacing: -1px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .unit {
+      font-size: 18px;
+      color: var(--muted);
+      margin-left: 3px;
+    }
+
+    .hot .value { color: var(--hot); }
+    .cold .value { color: var(--cold); }
+    .volt .value, .power .value { color: var(--volt); }
+
+    .charts {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    .chart-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      padding: 16px;
+      backdrop-filter: blur(12px);
+      min-height: 280px;
+    }
+
+    .chart-card h3 {
+      margin: 0 0 12px;
+      font-size: 16px;
+      color: var(--text);
+    }
+
+    canvas {
+      width: 100%;
+      height: 220px;
+      display: block;
+      border-radius: 14px;
+      background: rgba(0,0,0,0.18);
+    }
+
+    .table-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      padding: 16px;
+      margin-top: 14px;
+      backdrop-filter: blur(12px);
+    }
+
+    .table-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .table-head h3 { margin: 0; }
+
+    .small {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .table-wrap {
+      max-height: 270px;
+      overflow: auto;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      min-width: 850px;
+      background: rgba(0,0,0,0.12);
+    }
+
+    th, td {
+      padding: 10px 11px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    th:first-child, td:first-child { text-align: left; }
+    th {
+      position: sticky;
+      top: 0;
+      background: rgba(12,18,39,0.96);
+      color: var(--muted);
+      z-index: 1;
+    }
+
+    .emoji-pop {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%) scale(0);
+      font-size: min(22vw, 180px);
+      z-index: 50;
+      pointer-events: none;
+      filter: drop-shadow(0 0 34px rgba(255,209,102,0.8));
+      opacity: 0;
+    }
+
+    .emoji-pop.show {
+      animation: pop .78s ease-out forwards;
+    }
+
+    @keyframes pop {
+      0% { opacity: 0; transform: translate(-50%, -50%) scale(0.15) rotate(-8deg); }
+      28% { opacity: 1; transform: translate(-50%, -50%) scale(1.12) rotate(4deg); }
+      60% { opacity: 1; transform: translate(-50%, -50%) scale(0.98) rotate(0deg); }
+      100% { opacity: 0; transform: translate(-50%, -50%) scale(0.72) rotate(0deg); }
+    }
+
+    .flash {
+      position: fixed;
+      inset: 0;
+      background: rgba(255,255,255,0.62);
+      opacity: 0;
+      pointer-events: none;
+      z-index: 45;
+    }
+
+    .flash.show {
+      animation: flash .34s ease-out forwards;
+    }
+
+    @keyframes flash {
+      0% { opacity: 0; }
+      20% { opacity: 0.62; }
+      100% { opacity: 0; }
+    }
+
+    .fan-pop {
+      position: fixed;
+      right: 26px;
+      top: 24px;
+      font-size: 54px;
+      opacity: 0;
+      transform: scale(0.4) rotate(0deg);
+      z-index: 55;
+      pointer-events: none;
+    }
+
+    .fan-pop.show {
+      animation: fanSpin 1s ease-out forwards;
+    }
+
+    @keyframes fanSpin {
+      0% { opacity: 0; transform: scale(0.4) rotate(0deg); }
+      25% { opacity: 1; transform: scale(1.1) rotate(120deg); }
+      100% { opacity: 0; transform: scale(0.7) rotate(360deg); }
+    }
+
+    .warn {
+      background: rgba(255,77,109,0.11);
+      border: 1px solid rgba(255,77,109,0.25);
+      color: #ffd7df;
+      padding: 12px 14px;
+      border-radius: 16px;
+      margin-top: 12px;
+      line-height: 1.55;
+      font-size: 14px;
+    }
+
+    @media (max-width: 1050px) {
+      .dashboard { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .charts { grid-template-columns: 1fr; }
+      .toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 650px) {
+      .dashboard { grid-template-columns: 1fr; }
+      .toolbar { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="flash" id="flash"></div>
+  <div class="emoji-pop" id="centerEmoji">⚡</div>
+  <div class="fan-pop" id="fanEmoji">🌀</div>
+
+  <header>
+    <h1 class="title">폐열 발전 실시간 모니터링</h1>
+    <p class="subtitle">Arduino USB 연결 후 실시간 온도·전압·전류·전력 변화를 확인합니다.</p>
+  </header>
+
+  <main class="wrap">
+    <section class="toolbar">
+      <button class="primary" id="connectBtn">🔌 아두이노 연결</button>
+      <button id="recordBtn">💾 데이터 저장 시작</button>
+      <button id="downloadBtn">📊 Excel용 CSV 저장</button>
+      <button class="danger" id="resetBtn">🔄 새 실험 시작</button>
+    </section>
+
+    <section class="status-row">
+      <span class="status-pill"><span class="dot" id="connectDot"></span><span id="connectStatus">연결 대기</span></span>
+      <span class="status-pill"><span class="dot" id="recordDot"></span><span id="recordStatus">저장 대기</span></span>
+      <span class="status-pill">기록된 데이터: <b id="rowCount">0</b>개</span>
+      <span class="status-pill">전압 효과 기준: <b>3.00V</b></span>
+    </section>
+
+    <section class="dashboard">
+      <article class="card hot">
+        <h2>현재 뜨거운 면 온도</h2>
+        <div class="value"><span id="hotTemp">--</span><span class="unit">℃</span></div>
+      </article>
+      <article class="card cold">
+        <h2>현재 차가운 면 온도</h2>
+        <div class="value"><span id="coldTemp">--</span><span class="unit">℃</span></div>
+      </article>
+      <article class="card">
+        <h2>현재 온도차</h2>
+        <div class="value"><span id="deltaT">--</span><span class="unit">℃</span></div>
+      </article>
+      <article class="card volt">
+        <h2>현재 전압</h2>
+        <div class="value"><span id="voltage">--</span><span class="unit">V</span></div>
+      </article>
+      <article class="card">
+        <h2>현재 전류</h2>
+        <div class="value"><span id="current">--</span><span class="unit">mA</span></div>
+      </article>
+      <article class="card power">
+        <h2>현재 전력</h2>
+        <div class="value"><span id="power">--</span><span class="unit">mW</span></div>
+      </article>
+    </section>
+
+    <section class="charts">
+      <article class="chart-card">
+        <h3>시간에 따른 온도차</h3>
+        <canvas id="chartTemp"></canvas>
+      </article>
+      <article class="chart-card">
+        <h3>시간에 따른 전압</h3>
+        <canvas id="chartVolt"></canvas>
+      </article>
+      <article class="chart-card">
+        <h3>시간에 따른 전력</h3>
+        <canvas id="chartPower"></canvas>
+      </article>
+    </section>
+
+    <section class="table-card">
+      <div class="table-head">
+        <h3>저장된 데이터</h3>
+        <span class="small">저장 시작 버튼을 누른 뒤 들어온 값만 표에 쌓입니다.</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>시간(s)</th>
+              <th>뜨거운 면(℃)</th>
+              <th>차가운 면(℃)</th>
+              <th>온도차(℃)</th>
+              <th>전압(V)</th>
+              <th>전류(mA)</th>
+              <th>전력(mW)</th>
+              <th>팬</th>
+            </tr>
+          </thead>
+          <tbody id="dataBody"></tbody>
+        </table>
+      </div>
+      <div class="warn">
+        연결은 노트북/PC의 Chrome 또는 Edge에서 가장 잘 됩니다. 휴대폰·태블릿 브라우저에서는 USB 시리얼 연결이 제한될 수 있습니다.
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const els = {
+      connectBtn: document.getElementById('connectBtn'),
+      recordBtn: document.getElementById('recordBtn'),
+      downloadBtn: document.getElementById('downloadBtn'),
+      resetBtn: document.getElementById('resetBtn'),
+      connectDot: document.getElementById('connectDot'),
+      recordDot: document.getElementById('recordDot'),
+      connectStatus: document.getElementById('connectStatus'),
+      recordStatus: document.getElementById('recordStatus'),
+      rowCount: document.getElementById('rowCount'),
+      hotTemp: document.getElementById('hotTemp'),
+      coldTemp: document.getElementById('coldTemp'),
+      deltaT: document.getElementById('deltaT'),
+      voltage: document.getElementById('voltage'),
+      current: document.getElementById('current'),
+      power: document.getElementById('power'),
+      dataBody: document.getElementById('dataBody'),
+      centerEmoji: document.getElementById('centerEmoji'),
+      fanEmoji: document.getElementById('fanEmoji'),
+      flash: document.getElementById('flash')
+    };
+
+    const chartTemp = document.getElementById('chartTemp');
+    const chartVolt = document.getElementById('chartVolt');
+    const chartPower = document.getElementById('chartPower');
+
+    let port = null;
+    let reader = null;
+    let buffer = '';
+    let isRecording = false;
+    let savedRows = [];
+    let liveRows = [];
+    let voltageEffectUsed = false;
+    let heatEffectUsed = false;
+    let previousFan = 'OFF';
+
+    function fmt(value, digits = 2) {
+      if (!Number.isFinite(value)) return '--';
+      return value.toFixed(digits);
+    }
+
+    function setConnected(isOn) {
+      els.connectDot.classList.toggle('on', isOn);
+      els.connectStatus.textContent = isOn ? '아두이노 연결됨' : '연결 대기';
+      els.connectBtn.textContent = isOn ? '✅ 연결됨' : '🔌 아두이노 연결';
+    }
+
+    function setRecording(isOn) {
+      isRecording = isOn;
+      els.recordDot.classList.toggle('on', isOn);
+      els.recordStatus.textContent = isOn ? '저장 중' : '저장 대기';
+      els.recordBtn.classList.toggle('recording', isOn);
+      els.recordBtn.textContent = isOn ? '⏸ 데이터 저장 중지' : '💾 데이터 저장 시작';
+    }
+
+    function showCenterEmoji(emoji) {
+      els.centerEmoji.textContent = emoji;
+      els.centerEmoji.classList.remove('show');
+      els.flash.classList.remove('show');
+      void els.centerEmoji.offsetWidth;
+      els.flash.classList.add('show');
+      els.centerEmoji.classList.add('show');
+    }
+
+    function showFanEmoji() {
+      els.fanEmoji.classList.remove('show');
+      void els.fanEmoji.offsetWidth;
+      els.fanEmoji.classList.add('show');
+    }
+
+    function parseLine(line) {
+      const clean = line.trim();
+      if (!clean || clean.startsWith('Time_s') || clean.startsWith('HotTemp')) return null;
+      const parts = clean.split(',').map(v => v.trim());
+      if (parts.length < 8) return null;
+      const row = {
+        time: Number(parts[0]),
+        hot: Number(parts[1]),
+        cold: Number(parts[2]),
+        delta: Number(parts[3]),
+        voltage: Number(parts[4]),
+        current: Number(parts[5]),
+        power: Number(parts[6]),
+        fan: parts[7] || 'OFF'
+      };
+      if (![row.time, row.hot, row.cold, row.delta, row.voltage, row.current, row.power].every(Number.isFinite)) return null;
+      return row;
+    }
+
+    function updateLive(row) {
+      els.hotTemp.textContent = fmt(row.hot);
+      els.coldTemp.textContent = fmt(row.cold);
+      els.deltaT.textContent = fmt(row.delta);
+      els.voltage.textContent = fmt(row.voltage, 3);
+      els.current.textContent = fmt(row.current);
+      els.power.textContent = fmt(row.power);
+
+      liveRows.push(row);
+      if (liveRows.length > 180) liveRows.shift();
+
+      if (!voltageEffectUsed && row.voltage >= 3.0) {
+        voltageEffectUsed = true;
+        showCenterEmoji('⚡');
+      }
+      if (!heatEffectUsed && row.delta >= 20.0) {
+        heatEffectUsed = true;
+        showCenterEmoji('🔥');
+      }
+      if (previousFan !== 'ON' && row.fan === 'ON') {
+        showFanEmoji();
+      }
+      previousFan = row.fan;
+
+      if (isRecording) {
+        savedRows.push(row);
+        appendTableRow(row);
+        els.rowCount.textContent = savedRows.length;
+      }
+
+      drawAllCharts();
+    }
+
+    function appendTableRow(row) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${fmt(row.time, 0)}</td>
+        <td>${fmt(row.hot)}</td>
+        <td>${fmt(row.cold)}</td>
+        <td>${fmt(row.delta)}</td>
+        <td>${fmt(row.voltage, 3)}</td>
+        <td>${fmt(row.current)}</td>
+        <td>${fmt(row.power)}</td>
+        <td>${row.fan}</td>
+      `;
+      els.dataBody.appendChild(tr);
+      if (els.dataBody.children.length > 400) {
+        els.dataBody.removeChild(els.dataBody.firstChild);
+      }
+    }
+
+    function resizeCanvas(canvas) {
+      const ratio = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      const width = Math.max(320, Math.floor(rect.width * ratio));
+      const height = Math.max(180, Math.floor(rect.height * ratio));
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+      }
+      return { width, height, ratio };
+    }
+
+    function drawChart(canvas, rows, key, color, label) {
+      const { width, height } = resizeCanvas(canvas);
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, width, height);
+
+      const padL = 54, padR = 18, padT = 20, padB = 34;
+      const plotW = width - padL - padR;
+      const plotH = height - padT - padB;
+
+      ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 4; i++) {
+        const y = padT + (plotH * i / 4);
+        ctx.beginPath();
+        ctx.moveTo(padL, y);
+        ctx.lineTo(width - padR, y);
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = 'rgba(255,255,255,0.62)';
+      ctx.font = `${Math.max(11, width / 75)}px system-ui`;
+      ctx.fillText(label, padL, 15);
+
+      if (rows.length < 2) {
+        ctx.fillStyle = 'rgba(255,255,255,0.42)';
+        ctx.textAlign = 'center';
+        ctx.fillText('데이터 대기 중', width / 2, height / 2);
+        ctx.textAlign = 'left';
+        return;
+      }
+
+      const values = rows.map(r => r[key]);
+      let min = Math.min(...values);
+      let max = Math.max(...values);
+      if (min === max) { min -= 1; max += 1; }
+      const range = max - min;
+      min -= range * 0.12;
+      max += range * 0.12;
+
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      rows.forEach((row, i) => {
+        const x = padL + plotW * (i / (rows.length - 1));
+        const y = padT + plotH * (1 - ((row[key] - min) / (max - min)));
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+
+      const last = rows[rows.length - 1][key];
+      ctx.fillStyle = color;
+      ctx.font = `bold ${Math.max(15, width / 48)}px system-ui`;
+      ctx.fillText(fmt(last, key === 'voltage' ? 3 : 2), width - padR - 90, padT + 26);
+    }
+
+    function drawAllCharts() {
+      drawChart(chartTemp, liveRows, 'delta', '#61dafb', '온도차(℃)');
+      drawChart(chartVolt, liveRows, 'voltage', '#ffd166', '전압(V)');
+      drawChart(chartPower, liveRows, 'power', '#49e68b', '전력(mW)');
+    }
+
+    async function connectArduino() {
+      if (!('serial' in navigator)) {
+        alert('이 브라우저는 Web Serial 기능을 지원하지 않습니다. 노트북/PC의 Chrome 또는 Edge를 사용해 주세요.');
+        return;
+      }
+      try {
+        port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 9600 });
+        setConnected(true);
+        readLoop();
+      } catch (err) {
+        console.error(err);
+        alert('아두이노 연결이 취소되었거나 실패했습니다.');
+      }
+    }
+
+    async function readLoop() {
+      const decoder = new TextDecoderStream();
+      port.readable.pipeTo(decoder.writable).catch(() => {});
+      reader = decoder.readable.getReader();
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += value;
+          const lines = buffer.split(/\r?\n/);
+          buffer = lines.pop();
+          for (const line of lines) {
+            const row = parseLine(line);
+            if (row) updateLive(row);
+          }
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setConnected(false);
+      }
+    }
+
+    function resetExperiment() {
+      const ok = confirm('새 실험을 시작할까요? 저장된 표와 그래프가 초기화됩니다.');
+      if (!ok) return;
+      savedRows = [];
+      liveRows = [];
+      voltageEffectUsed = false;
+      heatEffectUsed = false;
+      previousFan = 'OFF';
+      els.dataBody.innerHTML = '';
+      els.rowCount.textContent = '0';
+      setRecording(false);
+      ['hotTemp','coldTemp','deltaT','voltage','current','power'].forEach(id => els[id].textContent = '--');
+      drawAllCharts();
+    }
+
+    function downloadCSV() {
+      if (savedRows.length === 0) {
+        alert('저장된 데이터가 없습니다. 먼저 [데이터 저장 시작] 버튼을 눌러 주세요.');
+        return;
+      }
+      const header = ['Time_s','HotTemp_C','ColdTemp_C','DeltaT_C','Voltage_V','Current_mA','Power_mW','Fan'];
+      const lines = [header.join(',')];
+      for (const r of savedRows) {
+        lines.push([
+          fmt(r.time, 0), fmt(r.hot), fmt(r.cold), fmt(r.delta), fmt(r.voltage, 3), fmt(r.current), fmt(r.power), r.fan
+        ].join(','));
+      }
+      const csv = '\uFEFF' + lines.join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const now = new Date();
+      const stamp = now.toISOString().slice(0,19).replaceAll(':','-');
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `TEG_${stamp}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(a.href);
+    }
+
+    els.connectBtn.addEventListener('click', connectArduino);
+    els.recordBtn.addEventListener('click', () => setRecording(!isRecording));
+    els.downloadBtn.addEventListener('click', downloadCSV);
+    els.resetBtn.addEventListener('click', resetExperiment);
+    window.addEventListener('resize', drawAllCharts);
+    drawAllCharts();
+  </script>
+</body>
+</html>
