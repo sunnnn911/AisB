@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>열전소자 발전 실험 대시보드</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main>
+    <h1>열전소자 발전 실험 대시보드</h1>
+
+    <div class="buttons">
+      <button id="connectBtn">아두이노 연결</button>
+      <button id="startBtn">측정 시작</button>
+      <button id="pauseBtn">일시정지</button>
+      <button id="clearBtn">초기화</button>
+      <button id="csvBtn">CSV 저장</button>
+    </div>
+
+    <section class="cards">
+      <div class="card"><p>온도</p><h2 id="tempNow">-- ℃</h2></div>
+      <div class="card"><p>전압</p><h2 id="voltageNow">-- V</h2></div>
+      <div class="card"><p>전류</p><h2 id="currentNow">-- mA</h2></div>
+      <div class="card"><p>전력</p><h2 id="powerNow">-- mW</h2></div>
+      <div class="card"><p>팬</p><h2 id="fanNow">--</h2></div>
+    </section>
+
+    <section class="summary">
+      <h2>실험 요약</h2>
+      <p id="summaryText">아직 측정 데이터가 없습니다.</p>
+    </section>
+
+    <section>
+      <h2>실시간 그래프</h2>
+      <canvas id="chart" width="1000" height="350"></canvas>
+    </section>
+
+    <section>
+      <h2>측정 표</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>시간(s)</th>
+            <th>온도(℃)</th>
+            <th>전압(V)</th>
+            <th>전류(mA)</th>
+            <th>전력(mW)</th>
+            <th>팬</th>
+          </tr>
+        </thead>
+        <tbody id="dataTable"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
